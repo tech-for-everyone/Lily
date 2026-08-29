@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Siri Voice Assistant",
+  "description": "Real-time Siri-like voice assistant powered by Gemini backend for processing natural language voice commands, real-time audio visualizer, tools, timers, reminders, weather, and speech synthesis.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
