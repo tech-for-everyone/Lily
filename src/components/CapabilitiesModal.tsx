@@ -1,4 +1,4 @@
-import { X, Sparkles, Timer, CloudSun, CheckSquare, Calculator, Music, Sliders, StickyNote, Calendar, ArrowRight } from "lucide-react";
+import { X, Sparkles, Timer, CloudSun, CheckSquare, Calculator, Music, Sliders, StickyNote, Calendar, Terminal, Cpu, PlaySquare, ShieldAlert, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface CapabilitiesModalProps {
@@ -13,6 +13,46 @@ export const CapabilitiesModal = ({
   onClose,
 }: CapabilitiesModalProps) => {
   const capabilityCategories = [
+    {
+      title: "Systemd Services (Arch Linux)",
+      icon: <Cpu className="w-4 h-4 text-cyan-400" />,
+      prompts: [
+        "Check status of bluetooth service",
+        "Restart pipewire service",
+        "Stop nginx service",
+        "Show journal logs for NetworkManager",
+      ],
+    },
+    {
+      title: "App Launcher & Desktop",
+      icon: <PlaySquare className="w-4 h-4 text-emerald-400" />,
+      prompts: [
+        "Launch Firefox",
+        "Open Alacritty terminal",
+        "Start Spotify",
+        "Open VS Code",
+      ],
+    },
+    {
+      title: "Arch Linux System Controls",
+      icon: <Sliders className="w-4 h-4 text-indigo-400" />,
+      prompts: [
+        "Set volume to 80%",
+        "Turn brightness to 70%",
+        "Show system hardware stats",
+        "Check pacman updates",
+      ],
+    },
+    {
+      title: "Terminal & Shell Commands",
+      icon: <Terminal className="w-4 h-4 text-amber-400" />,
+      prompts: [
+        "Run command fastfetch",
+        "Run uname -a",
+        "Execute ip addr",
+        "Run command pacman -Q",
+      ],
+    },
     {
       title: "Timers & Alarms",
       icon: <Timer className="w-4 h-4 text-amber-400" />,
@@ -59,28 +99,11 @@ export const CapabilitiesModal = ({
       ],
     },
     {
-      title: "Device Controls",
-      icon: <Sliders className="w-4 h-4 text-indigo-400" />,
-      prompts: [
-        "Turn on the flashlight",
-        "Enable Do Not Disturb mode",
-        "Set brightness to 80%",
-      ],
-    },
-    {
       title: "Notes & Memos",
       icon: <StickyNote className="w-4 h-4 text-yellow-400" />,
       prompts: [
         "Note that meeting is rescheduled to Wednesday",
         "Take a memo: Brainstorm ideas for the hackathon",
-      ],
-    },
-    {
-      title: "Calendar & Schedule",
-      icon: <Calendar className="w-4 h-4 text-rose-400" />,
-      prompts: [
-        "Schedule a Dentist Appointment tomorrow at 3 PM",
-        "Create calendar event: Team Sync at 11 AM",
       ],
     },
   ];

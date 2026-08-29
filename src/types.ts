@@ -18,7 +18,11 @@ export type CardType =
   | 'calendar' 
   | 'message' 
   | 'conversion' 
-  | 'search';
+  | 'search'
+  | 'systemd'
+  | 'app_launcher'
+  | 'linux_system'
+  | 'terminal';
 
 export interface WeatherData {
   location: string;
@@ -130,3 +134,69 @@ export interface VoiceSettings {
   ambientGlowTheme: 'siri-classic' | 'neon-aurora' | 'cyber-purple' | 'cosmic-amber' | 'emerald-zen';
   autoSpeakResponse: boolean;
 }
+
+export interface SystemdUnitData {
+  serviceName: string;
+  scope: 'user' | 'system';
+  action: 'status' | 'start' | 'stop' | 'restart' | 'enable' | 'disable' | 'journal';
+  activeState: 'active' | 'inactive' | 'failed' | 'activating' | 'deactivating' | 'unknown';
+  subState?: string;
+  loadState?: string;
+  description?: string;
+  mainPid?: number | null;
+  uptime?: string;
+  logs?: string[];
+  output?: string;
+  exitCode?: number;
+  success?: boolean;
+}
+
+export interface AppLauncherData {
+  appName: string;
+  displayName: string;
+  appCategory: string;
+  iconType: string;
+  status: 'launched' | 'already_running' | 'failed' | 'not_found';
+  message: string;
+  pid?: number | null;
+  execCommand: string;
+  args?: string;
+}
+
+export interface LinuxSystemData {
+  action: string;
+  status: 'success' | 'warning' | 'error';
+  message: string;
+  volume?: number;
+  isMuted?: boolean;
+  brightness?: number;
+  osInfo?: {
+    distro: string;
+    kernel: string;
+    uptime: string;
+    host: string;
+    shell?: string;
+  };
+  hardware?: {
+    cpuModel: string;
+    cpuUsagePercent: number;
+    ramTotal: string;
+    ramUsed: string;
+    ramPercent: number;
+    diskUsed: string;
+    diskTotal: string;
+    diskPercent: number;
+  };
+  updatesCount?: number;
+  updatesList?: string[];
+}
+
+export interface TerminalCommandData {
+  command: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  durationMs: number;
+  executedAt: string;
+}
+

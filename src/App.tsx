@@ -22,6 +22,10 @@ import { DeviceCard } from "./components/cards/DeviceCard";
 import { MediaCard } from "./components/cards/MediaCard";
 import { CalendarCard } from "./components/cards/CalendarCard";
 import { SearchCard } from "./components/cards/SearchCard";
+import { SystemdCard } from "./components/cards/SystemdCard";
+import { AppLauncherCard } from "./components/cards/AppLauncherCard";
+import { LinuxSystemCard } from "./components/cards/LinuxSystemCard";
+import { TerminalCard } from "./components/cards/TerminalCard";
 
 import {
   Mic,
@@ -333,6 +337,14 @@ export default function App() {
                 return <CalendarCard key={`cal-${idx}`} event={card.data} />;
               case "search":
                 return <SearchCard key={`search-${idx}`} data={card.data} />;
+              case "systemd":
+                return <SystemdCard key={`sysd-${idx}`} data={card.data} />;
+              case "app_launcher":
+                return <AppLauncherCard key={`app-${idx}`} data={card.data} />;
+              case "linux_system":
+                return <LinuxSystemCard key={`linux-${idx}`} data={card.data} />;
+              case "terminal":
+                return <TerminalCard key={`term-${idx}`} data={card.data} />;
               default:
                 return null;
             }

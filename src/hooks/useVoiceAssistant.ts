@@ -474,6 +474,37 @@ export function useVoiceAssistant() {
         break;
       }
 
+      case "control_linux_system": {
+        const action = args.action?.toLowerCase();
+        if (action?.includes("volume")) {
+          if (args.value && args.value.includes("%")) {
+            const num = parseInt(args.value);
+            if (!isNaN(num)) setDeviceState((prev) => ({ ...prev, volume: num }));
+          } else if (action.includes("up")) {
+            setDeviceState((prev) => ({ ...prev, volume: Math.min(100, prev.volume + 10) }));
+          } else if (action.includes("down")) {
+            setDeviceState((prev) => ({ ...prev, volume: Math.max(0, prev.volume - 10) }));
+          }
+        }
+        if (action?.includes("brightness")) {
+          if (args.value && args.value.includes("%")) {
+            const num = parseInt(args.value);
+            if (!isNaN(num)) setDeviceState((prev) => ({ ...prev, brightness: num }));
+          } else if (action.includes("up")) {
+            setDeviceState((prev) => ({ ...prev, brightness: Math.min(100, prev.brightness + 10) }));
+          } else if (action.includes("down")) {
+            setDeviceState((prev) => ({ ...prev, brightness: Math.max(10, prev.brightness - 10) }));
+          }
+        }
+        break;
+      }
+
+      case "manage_systemd":
+      case "launch_linux_app":
+      case "execute_linux_command":
+        // Handled directly and returned as displayCard
+        break;
+
       case "create_calendar_event": {
         const newEvent: CalendarEvent = {
           id: `cal-${Date.now()}`,

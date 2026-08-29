@@ -7,13 +7,14 @@ interface QuickPromptPillsProps {
 
 export const QuickPromptPills = ({ onSelect, disabled }: QuickPromptPillsProps) => {
   const suggestions = [
-    { label: "Pasta Timer", text: "Set a 5-minute timer for Pasta" },
+    { label: "Check Bluetooth", text: "Check status of bluetooth service" },
+    { label: "Open Firefox", text: "Launch Firefox" },
+    { label: "Terminal Fastfetch", text: "Run command fastfetch" },
+    { label: "Volume 80%", text: "Set volume to 80%" },
+    { label: "Restart Pipewire", text: "Restart pipewire service" },
+    { label: "System Specs", text: "Show system stats" },
+    { label: "5-min Timer", text: "Set a 5-minute timer for Coffee" },
     { label: "Tokyo Weather", text: "What's the weather in Tokyo right now?" },
-    { label: "Remind Me", text: "Remind me to call Mom at 6 PM" },
-    { label: "Calculate Tip", text: "Calculate 18% tip on an $85.40 bill" },
-    { label: "Play Lo-Fi", text: "Play chill lofi beats" },
-    { label: "Flashlight", text: "Turn on the flashlight" },
-    { label: "Quick Memo", text: "Note: Finish presentation slides by Friday" },
   ];
 
   return (

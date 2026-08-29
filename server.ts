@@ -3,6 +3,12 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Modality, Type, FunctionDeclaration } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  manageSystemdService,
+  launchLinuxApp,
+  controlLinuxSystem,
+  executeTerminalCommand,
+} from "./server/linuxEngine";
 
 dotenv.config();
 
@@ -240,6 +246,78 @@ const toolDeclarations: FunctionDeclaration[] = [
       required: ["amount", "fromUnit", "toUnit", "result"],
     },
   },
+  {
+    name: "manage_systemd",
+    description: "Manage, query status, start, stop, restart, enable, or view logs for Arch Linux systemd services/units (e.g., bluetooth, pipewire, docker, sshd, networkmanager, nginx).",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        serviceName: {
+          type: Type.STRING,
+          description: "Name of the systemd unit/service (e.g., 'bluetooth', 'pipewire', 'docker', 'sshd', 'nginx', 'NetworkManager')",
+        },
+        action: {
+          type: Type.STRING,
+          description: "Action to perform: 'status', 'start', 'stop', 'restart', 'enable', 'disable', 'journal'",
+        },
+        scope: {
+          type: Type.STRING,
+          description: "Systemd scope: 'system' or 'user'",
+        },
+      },
+      required: ["serviceName"],
+    },
+  },
+  {
+    name: "launch_linux_app",
+    description: "Launch, open, or start a Linux desktop application (e.g., Firefox, Alacritty, Kitty, Code, Spotify, Discord, Nautilus, Thunar, GIMP, VLC, Steam, Obsidian, Htop, Neovim).",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        appName: {
+          type: Type.STRING,
+          description: "Application name or binary command (e.g., 'firefox', 'alacritty', 'kitty', 'code', 'spotify', 'discord', 'nautilus', 'thunar', 'vlc', 'htop', 'btop')",
+        },
+        args: {
+          type: Type.STRING,
+          description: "Optional arguments, URLs, or file paths to pass to the application",
+        },
+      },
+      required: ["appName"],
+    },
+  },
+  {
+    name: "control_linux_system",
+    description: "Control Arch Linux system hardware and settings: master audio volume (PipeWire/PulseAudio), display brightness, power actions (sleep/suspend, reboot, shutdown, lock screen), check pacman package updates, or view hardware stats (RAM/CPU/Disk).",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        action: {
+          type: Type.STRING,
+          description: "Action: 'volume_set', 'volume_mute', 'volume_unmute', 'volume_up', 'volume_down', 'brightness_set', 'brightness_up', 'brightness_down', 'power_suspend', 'power_reboot', 'power_shutdown', 'power_lock', 'check_updates', 'hardware_stats'",
+        },
+        value: {
+          type: Type.STRING,
+          description: "Optional value like '80%', '50%', '+10%'",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "execute_linux_command",
+    description: "Execute a safe bash or terminal command on Arch Linux and inspect terminal stdout, stderr, and exit status (e.g., 'fastfetch', 'uname -a', 'free -h', 'df -h', 'ip addr', 'pacman -Q').",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        command: {
+          type: Type.STRING,
+          description: "The shell command to execute in the Linux terminal",
+        },
+      },
+      required: ["command"],
+    },
+  },
 ];
 
 // Health endpoint
@@ -258,21 +336,26 @@ app.post("/api/gemini/voice-command", async (req: Request, res: Response) => {
 
   const ai = getGeminiClient();
 
-  const systemInstruction = `You are Siri, an ultra-fast, intelligent, polite, and charismatic voice assistant powered by Google Gemini.
-Your purpose is to assist users through natural language voice commands.
+  const systemInstruction = `You are Siri, an ultra-fast, intelligent, polite, and charismatic voice assistant powered by Google Gemini running on Arch Linux.
+Your purpose is to assist users through natural language voice commands, system management, app launching, and daily productivity.
 
 CRITICAL VOICE RESPONSE PRINCIPLES:
 1. Speak in a natural, concise, warm, helpful conversational tone suited for being read aloud (audio Text-to-Speech).
 2. Keep spoken replies short, direct, and pleasant (usually 1-2 punchy sentences).
-3. Whenever the user requests an action (such as setting a timer, alarm, reminder, note, checking weather, math calculation, media playback, device control, calendar event, or unit conversion), YOU MUST CALL THE APPROPRIATE TOOL FUNCTION.
-4. When calling a tool function, formulate a natural spoken confirmation in your response (e.g., "Setting a 5-minute timer for Pasta now.", "I've added 'Call Mom' to your reminders.", "Here is the weather in Paris.").
+3. Whenever the user requests an action:
+   - For systemd services (e.g., status/restart/stop/start/enable/logs of bluetooth, pipewire, docker, sshd, nginx, etc.), call manage_systemd.
+   - For opening or launching apps (e.g., Firefox, Alacritty, Kitty, Code, Spotify, Discord, Nautilus, Thunar, GIMP, VLC, Steam, Obsidian, Htop, Neovim), call launch_linux_app.
+   - For Arch Linux system controls (audio volume, display brightness, suspend/sleep, reboot, shutdown, lock screen, pacman updates check, hardware stats), call control_linux_system.
+   - For executing Linux shell/terminal commands (fastfetch, uname, ip addr, free, df, pacman query, etc.), call execute_linux_command.
+   - For timers, alarms, reminders, notes, weather, math, media, device settings, calendar, or unit conversions, call their respective tools.
+4. When calling a tool function, formulate a natural spoken confirmation in your response (e.g., "Checking the status of the Bluetooth service now.", "Launching Firefox.", "Adjusting volume to 80 percent.", "Setting a 5-minute timer for Pasta.").
 5. Current local context: Date is around ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. Current time is ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}.
-6. If the user asks a knowledge question (facts, sports, definitions, trivia), answer succinctly and clearly.`;
+6. If the user asks a knowledge question (facts, Arch Linux tips, definitions, trivia), answer succinctly and clearly.`;
 
   try {
     if (!ai) {
       // Fallback mock responses when API key is not configured
-      const fallbackResult = handleLocalFallback(message, contextState);
+      const fallbackResult = await handleLocalFallback(message, contextState);
       res.json(fallbackResult);
       return;
     }
@@ -337,7 +420,7 @@ CRITICAL VOICE RESPONSE PRINCIPLES:
         });
       } catch (fallbackErr: any) {
         console.warn("Gemini API rate limit or quota exceeded. Seamlessly activating local voice engine fallback.");
-        const fallbackResult = handleLocalFallback(message, contextState);
+        const fallbackResult = await handleLocalFallback(message, contextState);
         res.json(fallbackResult);
         return;
       }
@@ -356,11 +439,11 @@ CRITICAL VOICE RESPONSE PRINCIPLES:
       };
 
       // Process display card based on tool action
-      displayCard = createCardFromTool(call.name, call.args, message);
+      displayCard = await createCardFromTool(call.name, call.args, message);
       
       // If model didn't generate enough spoken text because of function call, provide clean spoken text
       if (!spokenText || spokenText.trim().length === 0) {
-        spokenText = generateDefaultSpokenText(call.name, call.args);
+        spokenText = generateDefaultSpokenText(call.name, call.args, displayCard);
       }
     }
 
@@ -403,8 +486,74 @@ CRITICAL VOICE RESPONSE PRINCIPLES:
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     // Graceful fallback on error
-    const fallbackResult = handleLocalFallback(message, contextState);
+    const fallbackResult = await handleLocalFallback(message, contextState);
     res.json(fallbackResult);
+  }
+});
+
+// Direct Linux System REST API Endpoints
+app.post("/api/system/systemd", async (req: Request, res: Response) => {
+  try {
+    const { serviceName, action = "status", scope = "system" } = req.body;
+    if (!serviceName) {
+      res.status(400).json({ error: "serviceName is required" });
+      return;
+    }
+    const result = await manageSystemdService(serviceName, action, scope);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to manage systemd service" });
+  }
+});
+
+app.post("/api/system/launch-app", async (req: Request, res: Response) => {
+  try {
+    const { appName, args } = req.body;
+    if (!appName) {
+      res.status(400).json({ error: "appName is required" });
+      return;
+    }
+    const result = await launchLinuxApp(appName, args);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to launch application" });
+  }
+});
+
+app.post("/api/system/control", async (req: Request, res: Response) => {
+  try {
+    const { action, value } = req.body;
+    if (!action) {
+      res.status(400).json({ error: "action is required" });
+      return;
+    }
+    const result = await controlLinuxSystem(action, value);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to execute system control" });
+  }
+});
+
+app.post("/api/system/exec", async (req: Request, res: Response) => {
+  try {
+    const { command } = req.body;
+    if (!command) {
+      res.status(400).json({ error: "command is required" });
+      return;
+    }
+    const result = await executeTerminalCommand(command);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to execute command" });
+  }
+});
+
+app.get("/api/system/status", async (_req: Request, res: Response) => {
+  try {
+    const result = await controlLinuxSystem("hardware_stats");
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to get system status" });
   }
 });
 
@@ -471,11 +620,52 @@ app.post("/api/gemini/tts", async (req: Request, res: Response) => {
 });
 
 // Helper to generate display cards from tool calls
-function createCardFromTool(toolName: string, args: any, rawPrompt: string) {
+async function createCardFromTool(toolName: string, args: any, rawPrompt: string): Promise<any> {
   switch (toolName) {
+    case "manage_systemd": {
+      const serviceName = args.serviceName || "bluetooth";
+      const action = args.action || "status";
+      const scope = args.scope || "system";
+      const unitData = await manageSystemdService(serviceName, action, scope);
+      return {
+        type: "systemd",
+        title: `Service: ${serviceName}`,
+        data: unitData,
+      };
+    }
+
+    case "launch_linux_app": {
+      const appName = args.appName || "terminal";
+      const launchData = await launchLinuxApp(appName, args.args);
+      return {
+        type: "app_launcher",
+        title: `App: ${launchData.displayName}`,
+        data: launchData,
+      };
+    }
+
+    case "control_linux_system": {
+      const action = args.action || "hardware_stats";
+      const sysData = await controlLinuxSystem(action, args.value);
+      return {
+        type: "linux_system",
+        title: "Arch Linux Control",
+        data: sysData,
+      };
+    }
+
+    case "execute_linux_command": {
+      const cmd = args.command || "uname -a";
+      const termData = await executeTerminalCommand(cmd);
+      return {
+        type: "terminal",
+        title: `Command: ${cmd.split(" ")[0]}`,
+        data: termData,
+      };
+    }
+
     case "get_weather": {
       const loc = args.location || "San Francisco, CA";
-      // Generate realistic dynamic forecast for given location
       const isCelsius = args.unit === "celsius";
       const baseTemp = isCelsius ? 21 : 70;
       return {
@@ -649,8 +839,18 @@ function createCardFromTool(toolName: string, args: any, rawPrompt: string) {
   }
 }
 
-function generateDefaultSpokenText(toolName: string, args: any): string {
+function generateDefaultSpokenText(toolName: string, args: any, displayCard?: any): string {
   switch (toolName) {
+    case "manage_systemd": {
+      const state = displayCard?.data?.activeState || "processed";
+      return `The ${args.serviceName || "systemd"} service is currently ${state}.`;
+    }
+    case "launch_linux_app":
+      return `Launching ${displayCard?.data?.displayName || args.appName || "application"}.`;
+    case "control_linux_system":
+      return `Adjusted system settings.`;
+    case "execute_linux_command":
+      return `Executed command: ${args.command || "script"}.`;
     case "set_timer":
       return `Setting a timer for ${Math.round(args.durationSeconds / 60)} minutes.`;
     case "set_alarm":
@@ -677,8 +877,128 @@ function generateDefaultSpokenText(toolName: string, args: any): string {
 }
 
 // Fallback logic when offline, rate-limited, or quota exceeded
-function handleLocalFallback(message: string, contextState: any) {
+async function handleLocalFallback(message: string, contextState: any): Promise<any> {
   const lower = message.toLowerCase().trim();
+
+  // A. Systemd service commands
+  // e.g. "status of bluetooth", "systemctl status sshd", "restart pipewire service", "stop nginx", "start docker"
+  const systemdMatch = lower.match(/(?:systemctl|service|systemd)\s+(status|restart|start|stop|enable|disable|journal|logs)\s+([a-zA-Z0-9_-]+)/i) ||
+    lower.match(/(status|restart|start|stop|enable|disable|check)\s+(?:the\s+)?([a-zA-Z0-9_-]+)\s+service/i) ||
+    lower.match(/(?:check\s+)?service\s+([a-zA-Z0-9_-]+)\s+(status|restart|start|stop)/i);
+
+  if (systemdMatch) {
+    let action = "status";
+    let serviceName = "bluetooth";
+    if (systemdMatch[1] && ["status", "restart", "start", "stop", "enable", "disable", "journal", "logs", "check"].includes(systemdMatch[1])) {
+      action = systemdMatch[1] === "check" ? "status" : systemdMatch[1];
+      serviceName = systemdMatch[2] || "bluetooth";
+    } else {
+      serviceName = systemdMatch[1];
+      action = systemdMatch[2] || "status";
+    }
+    const unitData = await manageSystemdService(serviceName, action as any, "system");
+    const displayCard = {
+      type: "systemd",
+      title: `Service: ${serviceName}`,
+      data: unitData,
+    };
+    return {
+      spokenText: `The ${serviceName} service is currently ${unitData.activeState}.`,
+      toolAction: { name: "manage_systemd", args: { serviceName, action } },
+      displayCard,
+    };
+  }
+
+  // B. Linux Desktop Application Launching
+  // e.g. "open firefox", "launch alacritty", "start spotify", "open discord", "open code", "open terminal", "launch htop"
+  const appLaunchMatch = lower.match(/(?:open|launch|start|run)\s+(firefox|chrome|chromium|brave|alacritty|kitty|wezterm|foot|termite|gnome-terminal|konsole|terminal|code|vscodium|nvim|neovim|emacs|gedit|spotify|discord|slack|telegram|thunderbird|steam|lutris|heroic|vlc|mpv|obs|gimp|inkscape|kdenlive|blender|nautilus|thunar|dolphin|pcmanfm|files|htop|btop|calculator|calc|obsidian|libreoffice)/i);
+  if (appLaunchMatch) {
+    const rawApp = appLaunchMatch[1].toLowerCase();
+    const appData = await launchLinuxApp(rawApp);
+    const displayCard = {
+      type: "app_launcher",
+      title: `App: ${appData.displayName}`,
+      data: appData,
+    };
+    return {
+      spokenText: `Launching ${appData.displayName}.`,
+      toolAction: { name: "launch_linux_app", args: { appName: rawApp } },
+      displayCard,
+    };
+  }
+
+  // C. Linux Shell Execution
+  // e.g. "run command fastfetch", "run uname -a", "exec ls -la", "execute ip addr", "run command pacman -Q"
+  const execMatch = lower.match(/(?:run command|exec|execute|terminal command|run in terminal|bash command)\s+(.+)/i);
+  if (execMatch) {
+    const cmd = execMatch[1].trim();
+    const termData = await executeTerminalCommand(cmd);
+    const displayCard = {
+      type: "terminal",
+      title: `Command: ${cmd.split(" ")[0]}`,
+      data: termData,
+    };
+    return {
+      spokenText: `Executed command "${cmd}". Exit code ${termData.exitCode}.`,
+      toolAction: { name: "execute_linux_command", args: { command: cmd } },
+      displayCard,
+    };
+  }
+
+  // D. Arch Linux System Settings & Power controls
+  // e.g. "set volume to 80%", "mute volume", "unmute audio", "turn brightness to 70%", "suspend computer", "reboot", "shutdown", "check pacman updates", "show system stats"
+  if (lower.includes("suspend") || lower.includes("sleep system") || lower.includes("reboot") || lower.includes("shutdown") || lower.includes("power off") || lower.includes("lock screen") || lower.includes("check updates") || lower.includes("pacman") || lower.includes("hardware") || lower.includes("system specs") || lower.includes("system status") || (lower.includes("volume") && (lower.includes("%") || lower.includes("set") || lower.includes("mute") || lower.includes("unmute"))) || (lower.includes("brightness") && (lower.includes("%") || lower.includes("set")))) {
+    let action = "hardware_stats";
+    let value = "";
+
+    if (lower.includes("suspend") || lower.includes("sleep")) {
+      action = "power_suspend";
+    } else if (lower.includes("reboot") || lower.includes("restart computer")) {
+      action = "power_reboot";
+    } else if (lower.includes("shutdown") || lower.includes("power off")) {
+      action = "power_shutdown";
+    } else if (lower.includes("lock screen") || lower.includes("lock session")) {
+      action = "power_lock";
+    } else if (lower.includes("update") || lower.includes("pacman")) {
+      action = "check_updates";
+    } else if (lower.includes("unmute")) {
+      action = "volume_unmute";
+    } else if (lower.includes("mute")) {
+      action = "volume_mute";
+    } else if (lower.includes("volume")) {
+      const volNum = lower.match(/(\d+)%/);
+      if (volNum) {
+        action = "volume_set";
+        value = `${volNum[1]}%`;
+      } else if (lower.includes("up") || lower.includes("increase")) {
+        action = "volume_up";
+      } else if (lower.includes("down") || lower.includes("decrease")) {
+        action = "volume_down";
+      }
+    } else if (lower.includes("brightness")) {
+      const bNum = lower.match(/(\d+)%/);
+      if (bNum) {
+        action = "brightness_set";
+        value = `${bNum[1]}%`;
+      } else if (lower.includes("up") || lower.includes("increase")) {
+        action = "brightness_up";
+      } else if (lower.includes("down") || lower.includes("decrease")) {
+        action = "brightness_down";
+      }
+    }
+
+    const sysData = await controlLinuxSystem(action, value);
+    const displayCard = {
+      type: "linux_system",
+      title: "Arch Linux Control",
+      data: sysData,
+    };
+    return {
+      spokenText: `Adjusted system settings on Arch Linux.`,
+      toolAction: { name: "control_linux_system", args: { action, value } },
+      displayCard,
+    };
+  }
 
   // 1. Timer command: e.g. "set a timer for 5 minutes", "timer 10 min for tea"
   const timerMatch = lower.match(/(?:timer|set a timer for|count down|countdown)\s+(?:for\s+)?(\d+)\s*(minute|min|second|sec|hour|hr)s?(?:\s+(?:for|called|named)\s+([a-zA-Z0-9\s]+))?/i);
@@ -690,7 +1010,7 @@ function handleLocalFallback(message: string, contextState: any) {
     if (unit.startsWith("hour") || unit.startsWith("hr")) seconds = val * 3600;
     const label = timerMatch[3] ? timerMatch[3].trim() : "Timer";
 
-    const displayCard = createCardFromTool("set_timer", { durationSeconds: seconds, label }, message);
+    const displayCard = await createCardFromTool("set_timer", { durationSeconds: seconds, label }, message);
     return {
       spokenText: `Setting a ${val} ${unit} timer for ${label}.`,
       toolAction: { name: "set_timer", args: { durationSeconds: seconds, label } },
@@ -705,7 +1025,7 @@ function handleLocalFallback(message: string, contextState: any) {
     if (!alarmTime.includes("AM") && !alarmTime.includes("PM")) {
       alarmTime += " AM";
     }
-    const displayCard = createCardFromTool("set_alarm", { time: alarmTime, label: "Alarm" }, message);
+    const displayCard = await createCardFromTool("set_alarm", { time: alarmTime, label: "Alarm" }, message);
     return {
       spokenText: `I've set your alarm for ${alarmTime}.`,
       toolAction: { name: "set_alarm", args: { time: alarmTime, label: "Alarm" } },
@@ -718,7 +1038,7 @@ function handleLocalFallback(message: string, contextState: any) {
     let loc = "San Francisco, CA";
     const locMatch = lower.match(/(?:in|for|at)\s+([a-zA-Z\s,]+)/i);
     if (locMatch) loc = locMatch[1].trim();
-    const displayCard = createCardFromTool("get_weather", { location: loc }, message);
+    const displayCard = await createCardFromTool("get_weather", { location: loc }, message);
     return {
       spokenText: `Here is the current weather forecast for ${loc}. It's 72°F and partly cloudy.`,
       toolAction: { name: "get_weather", args: { location: loc } },
@@ -730,7 +1050,7 @@ function handleLocalFallback(message: string, contextState: any) {
   if (lower.includes("remind") || lower.includes("reminder") || lower.includes("todo")) {
     let title = message.replace(/(?:remind me to|create a reminder to|add reminder to|add reminder|reminder:?)\s*/i, "").trim();
     if (!title) title = "Important task";
-    const displayCard = createCardFromTool("add_reminder", { title, priority: "medium", dueTime: "Today at 5:00 PM" }, message);
+    const displayCard = await createCardFromTool("add_reminder", { title, priority: "medium", dueTime: "Today at 5:00 PM" }, message);
     return {
       spokenText: `I've added "${title}" to your reminders.`,
       toolAction: { name: "add_reminder", args: { title, priority: "medium", dueTime: "Today at 5:00 PM" } },
@@ -743,7 +1063,7 @@ function handleLocalFallback(message: string, contextState: any) {
     let content = message.replace(/(?:take a note:?|create a note:?|write a note:?|note:?)\s*/i, "").trim();
     if (!content) content = "Quick voice note";
     const title = content.length > 25 ? content.slice(0, 22) + "..." : content;
-    const displayCard = createCardFromTool("create_note", { title, content, tags: ["Voice Note"] }, message);
+    const displayCard = await createCardFromTool("create_note", { title, content, tags: ["Voice Note"] }, message);
     return {
       spokenText: `I've created the note "${title}".`,
       toolAction: { name: "create_note", args: { title, content, tags: ["Voice Note"] } },
@@ -757,7 +1077,7 @@ function handleLocalFallback(message: string, contextState: any) {
     const time = timeMatch ? timeMatch[1].toUpperCase() : "2:00 PM";
     const titleMatch = message.replace(/(?:schedule|add calendar event|add event|create appointment)\s*/i, "").trim();
     const title = titleMatch || "Meeting";
-    const displayCard = createCardFromTool("create_calendar_event", { title, time, date: "Tomorrow", durationMinutes: 45 }, message);
+    const displayCard = await createCardFromTool("create_calendar_event", { title, time, date: "Tomorrow", durationMinutes: 45 }, message);
     return {
       spokenText: `I've scheduled "${title}" for ${time}.`,
       toolAction: { name: "create_calendar_event", args: { title, time, date: "Tomorrow", durationMinutes: 45 } },
@@ -800,7 +1120,7 @@ function handleLocalFallback(message: string, contextState: any) {
       formattedResult = `${resNum.toFixed(2)} ${toUnit}`;
     }
 
-    const displayCard = createCardFromTool("convert_units", { amount: amt, fromUnit, toUnit, result: formattedResult }, message);
+    const displayCard = await createCardFromTool("convert_units", { amount: amt, fromUnit, toUnit, result: formattedResult }, message);
     return {
       spokenText: `${amt} ${fromUnit} is equal to ${formattedResult}.`,
       toolAction: { name: "convert_units", args: { amount: amt, fromUnit, toUnit, result: formattedResult } },
@@ -830,7 +1150,7 @@ function handleLocalFallback(message: string, contextState: any) {
         const bill = parseFloat(tipMatch[2]);
         const tipVal = ((pct / 100) * bill).toFixed(2);
         const total = (bill + parseFloat(tipVal)).toFixed(2);
-        const displayCard = createCardFromTool("calculate", { expression: `$${bill} + ${pct}% ($${tipVal})`, result: `$${total}`, explanation: `${pct}% tip is $${tipVal}, bringing the total to $${total}` }, message);
+        const displayCard = await createCardFromTool("calculate", { expression: `$${bill} + ${pct}% ($${tipVal})`, result: `$${total}`, explanation: `${pct}% tip is $${tipVal}, bringing the total to $${total}` }, message);
         return {
           spokenText: `A ${pct}% tip on $${bill} is $${tipVal}, for a total of $${total}.`,
           toolAction: { name: "calculate", args: { expression: `$${bill} + ${pct}%`, result: `$${total}` } },
@@ -845,7 +1165,7 @@ function handleLocalFallback(message: string, contextState: any) {
       const pct = parseFloat(pctOfMatch[1]);
       const base = parseFloat(pctOfMatch[2]);
       const res = (pct / 100) * base;
-      const displayCard = createCardFromTool("calculate", { expression: `${pct}% of ${base}`, result: `${res}`, explanation: `(${pct} / 100) * ${base} = ${res}` }, message);
+      const displayCard = await createCardFromTool("calculate", { expression: `${pct}% of ${base}`, result: `${res}`, explanation: `(${pct} / 100) * ${base} = ${res}` }, message);
       return {
         spokenText: `${pct}% of ${base} is ${res}.`,
         toolAction: { name: "calculate", args: { expression: `${pct}% of ${base}`, result: `${res}` } },
@@ -875,7 +1195,7 @@ function handleLocalFallback(message: string, contextState: any) {
         const calcRes = Function(`"use strict"; return (${sanitized})`)();
         if (typeof calcRes === "number" && !isNaN(calcRes) && isFinite(calcRes)) {
           const formatted = Number.isInteger(calcRes) ? calcRes.toString() : calcRes.toFixed(2);
-          const displayCard = createCardFromTool("calculate", { expression: mathExpr, result: formatted, explanation: `Evaluated ${mathExpr} = ${formatted}` }, message);
+          const displayCard = await createCardFromTool("calculate", { expression: mathExpr, result: formatted, explanation: `Evaluated ${mathExpr} = ${formatted}` }, message);
           return {
             spokenText: `The answer is ${formatted}.`,
             toolAction: { name: "calculate", args: { expression: mathExpr, result: formatted } },
@@ -895,7 +1215,7 @@ function handleLocalFallback(message: string, contextState: any) {
     if (lower.includes("ambient") || lower.includes("focus")) genre = "ambient";
     if (lower.includes("synthwave") || lower.includes("retro")) genre = "synthwave";
     if (lower.includes("pop")) genre = "pop";
-    const displayCard = createCardFromTool("play_media", { action, genre }, message);
+    const displayCard = await createCardFromTool("play_media", { action, genre }, message);
     return {
       spokenText: action === "play" ? `Playing ${genre} music for you.` : `Paused media playback.`,
       toolAction: { name: "play_media", args: { action, genre } },
@@ -937,7 +1257,7 @@ function handleLocalFallback(message: string, contextState: any) {
       action = lower.includes("up") || lower.includes("increase") ? "increase" : "decrease";
     }
 
-    const displayCard = createCardFromTool("control_device", { device, action, value }, message);
+    const displayCard = await createCardFromTool("control_device", { device, action, value }, message);
     return {
       spokenText: `I have updated your ${device} setting.`,
       toolAction: { name: "control_device", args: { device, action, value } },
@@ -948,7 +1268,7 @@ function handleLocalFallback(message: string, contextState: any) {
   // 11. Conversational Personality & Common Siri Inquiries
   if (lower.includes("who are you") || lower.includes("what is your name")) {
     return {
-      spokenText: "I am Siri, powered by Google Gemini, designed with an elegant frosted glass interface.",
+      spokenText: "I am Siri, powered by Google Gemini, designed with an elegant frosted glass interface running on Arch Linux.",
       toolAction: null,
       displayCard: null,
     };
@@ -956,7 +1276,7 @@ function handleLocalFallback(message: string, contextState: any) {
 
   if (lower.includes("what can you do") || lower.includes("help") || lower.includes("features")) {
     return {
-      spokenText: "I can set timers and alarms, add reminders, take notes, check real-time weather, compute math, convert units, play music, and control your device settings.",
+      spokenText: "I can manage Arch Linux systemd services, launch desktop apps like Firefox and Alacritty, adjust volume and brightness, run shell commands, set timers, take notes, check the weather, and much more.",
       toolAction: null,
       displayCard: null,
     };
@@ -964,6 +1284,7 @@ function handleLocalFallback(message: string, contextState: any) {
 
   if (lower.includes("tell me a joke") || lower.includes("make me laugh")) {
     const jokes = [
+      "Why do Arch Linux users never get lost? Because they build their own path!",
       "Why don't scientists trust atoms? Because they make up everything!",
       "Why did the computer go to the doctor? Because it had a virus!",
       "Why did the web developer leave the restaurant? Because of the table layout!",
@@ -1013,7 +1334,7 @@ function handleLocalFallback(message: string, contextState: any) {
 
   if (lower.includes("how are you") || lower.includes("how's it going")) {
     return {
-      spokenText: "I'm doing great and ready to assist you. What can I do for you today?",
+      spokenText: "I'm doing great on Arch Linux and ready to assist you. What can I do for you today?",
       toolAction: null,
       displayCard: null,
     };
@@ -1029,7 +1350,7 @@ function handleLocalFallback(message: string, contextState: any) {
 
   // Default pleasant assistant response
   return {
-    spokenText: `I'm ready to assist you. You can ask me to set timers, alarms, take notes, calculate numbers, check the weather, or control device settings.`,
+    spokenText: `I'm ready to assist you. You can ask me to manage systemd services, launch apps, run terminal commands, set timers, alarms, take notes, or check the weather.`,
     toolAction: null,
     displayCard: null,
   };
